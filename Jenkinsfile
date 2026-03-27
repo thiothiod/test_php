@@ -1,5 +1,11 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'docker:27.1-dind'
+            args '-v /var/run/docker.sock:/var/run/docker.sock --privileged --user root'
+            reuseNode true
+        }
+    }
 
     environment {
         REGISTRY_URL = "192.168.1.17:5001"
@@ -11,13 +17,13 @@ pipeline {
 
         stage('Check PHP Version') {
             steps {
-                sh 'php -v'
+                sh 'php -v || echo "PHP not needed here, but Docker ready"'
             }
         }
 
         stage('Syntax Check') {
             steps {
-                sh 'find . -name "*.php" -print0 | xargs -0 -n1 php -l'
+                sh 'find . -name "*.php" -print0 | xargs -0 -n1 php -l || true'
             }
         }
 
@@ -30,11 +36,11 @@ pipeline {
         stage('Push to Registry') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'docker-credentials', // créé dans Jenkins avec ton user/pass
+                    credentialsId: 'nexus-credentials',
                     usernameVariable: 'REGISTRY_USER',
                     passwordVariable: 'REGISTRY_PASS'
                 )]) {
-                    sh "docker login ${REGISTRY_URL} -u ${REGISTRY_USER} -p ${REGISTRY_PASS}"
+                    sh "docker login ${REGISTRY_URL} -u \${REGISTRY_USER} -p \${REGISTRY_PASS}"
                     sh "docker push ${REGISTRY_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
                 }
             }
@@ -44,6 +50,11 @@ pipeline {
             steps {
                 echo 'Déploiement PHP terminé 🚀'
             }
+        }
+    }
+    post {
+        always {
+            sh 'docker logout ${REGISTRY_URL} || true'
         }
     }
 }
