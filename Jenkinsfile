@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    environment {
+        IMAGE_NAME = "mon-site-php"
+        IMAGE_TAG  = "build-${env.BUILD_NUMBER}"
+    }
+
     stages {
 
         stage('Clone') {
@@ -9,34 +14,62 @@ pipeline {
             }
         }
 
-        stage('Check PHP Version') {
+        stage('Build Docker Image') {
             steps {
-                sh 'php -v'
+                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
             }
         }
 
-        stage('Syntax Check') {
+        stage('Vérifier la version PHP') {
             steps {
-                sh 'find . -name "*.php" -print0 | xargs -0 -n1 php -l'
+                sh "docker run --rm ${IMAGE_NAME}:${IMAGE_TAG} php -v"
             }
         }
 
-        stage('Install Dependencies') {
+        stage('Vérification de la syntaxe') {
             steps {
-                sh 'composer install || true'
+                sh """
+                    docker run --rm \
+                        -v \$(pwd):/var/www/html \
+                        ${IMAGE_NAME}:${IMAGE_TAG} \
+                        find /var/www/html -name '*.php' -exec php -l {} \\;
+                """
             }
         }
 
-        stage('Run Tests') {
+        stage('Installation des dépendances') {
             steps {
-                sh 'vendor/bin/phpunit || true'
+                sh """
+                    docker run --rm \
+                        -v \$(pwd):/var/www/html \
+                        ${IMAGE_NAME}:${IMAGE_TAG} \
+                        composer install --no-interaction --prefer-dist
+                """
             }
         }
 
-        stage('Deploy') {
+        stage('Exécution des tests') {
             steps {
-                echo 'Déploiement PHP terminé 🚀'
+                sh """
+                    docker run --rm \
+                        -v \$(pwd):/var/www/html \
+                        ${IMAGE_NAME}:${IMAGE_TAG} \
+                        ./vendor/bin/phpunit --testdox
+                """
             }
+        }
+
+    }
+
+    post {
+        always {
+            sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true"
+        }
+        success {
+            echo '✅ Pipeline réussi !'
+        }
+        failure {
+            echo '❌ Pipeline échoué. Vérifiez les logs.'
         }
     }
 }
