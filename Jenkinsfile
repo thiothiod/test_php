@@ -1,75 +1,51 @@
 pipeline {
     agent any
 
-    environment {
-        IMAGE_NAME = "mon-site-php"
-        IMAGE_TAG  = "build-${env.BUILD_NUMBER}"
-    }
-
     stages {
 
-        stage('Clone') {
+        stage('Cloner') {
             steps {
                 git branch: 'main', url: 'https://github.com/thiothiod/test_php.git'
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Verifier la version PHP') {
             steps {
-                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                sh 'php -v'
             }
         }
 
-        stage('Vérifier la version PHP') {
+        stage('Verification de la syntaxe') {
             steps {
-                sh "docker run --rm ${IMAGE_NAME}:${IMAGE_TAG} php -v"
+                sh 'find . -name "*.php" -print0 | xargs -0 -n1 php -l'
             }
         }
 
-        stage('Vérification de la syntaxe') {
+        stage('Installation des dependances') {
             steps {
-                sh """
-                    docker run --rm \
-                        -v \$(pwd):/var/www/html \
-                        ${IMAGE_NAME}:${IMAGE_TAG} \
-                        find /var/www/html -name '*.php' -exec php -l {} \\;
-                """
+                sh 'composer install --no-interaction --prefer-dist'
             }
         }
 
-        stage('Installation des dépendances') {
+        stage('Execution des tests') {
             steps {
-                sh """
-                    docker run --rm \
-                        -v \$(pwd):/var/www/html \
-                        ${IMAGE_NAME}:${IMAGE_TAG} \
-                        composer install --no-interaction --prefer-dist
-                """
+                sh 'vendor/bin/phpunit --testdox'
             }
         }
 
-        stage('Exécution des tests') {
+        stage('Deploiement') {
             steps {
-                sh """
-                    docker run --rm \
-                        -v \$(pwd):/var/www/html \
-                        ${IMAGE_NAME}:${IMAGE_TAG} \
-                        ./vendor/bin/phpunit --testdox
-                """
+                echo 'Deploiement PHP termine !'
             }
         }
-
     }
 
     post {
-        always {
-            sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true"
-        }
         success {
-            echo '✅ Pipeline réussi !'
+            echo 'Pipeline reussi !'
         }
         failure {
-            echo '❌ Pipeline échoué. Vérifiez les logs.'
+            echo 'Pipeline echoue. Verifiez les logs.'
         }
     }
 }
