@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        NEXUS_URL = "192.168.1.17:8082"
+        REGISTRY_URL = "192.168.1.17:5001"
         IMAGE_NAME = "mon-site-php"
         IMAGE_TAG = "latest"
     }
@@ -23,19 +23,19 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t ${NEXUS_URL}/${IMAGE_NAME}:${IMAGE_TAG} ."
+                sh "docker build -t ${REGISTRY_URL}/${IMAGE_NAME}:${IMAGE_TAG} ."
             }
         }
 
-        stage('Push to Nexus') {
+        stage('Push to Registry') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'nexus-credentials',
-                    usernameVariable: 'NEXUS_USER',
-                    passwordVariable: 'NEXUS_PASS'
+                    credentialsId: 'docker-credentials', // créé dans Jenkins avec ton user/pass
+                    usernameVariable: 'REGISTRY_USER',
+                    passwordVariable: 'REGISTRY_PASS'
                 )]) {
-                    sh "docker login ${NEXUS_URL} -u ${NEXUS_USER} -p ${NEXUS_PASS}"
-                    sh "docker push ${NEXUS_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
+                    sh "docker login ${REGISTRY_URL} -u ${REGISTRY_USER} -p ${REGISTRY_PASS}"
+                    sh "docker push ${REGISTRY_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
                 }
             }
         }
